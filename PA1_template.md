@@ -34,19 +34,20 @@ activitytable <- read.csv("activity.csv")
 ```
 
 ## Pre-Process the data
-The raw data file uses military time, treating the numbers as integers. Due to this intervals have a jump at each hour mark, which is problematic in a time series plot. This issue is corrected to get equidistant intervals.
-The 24 hour clock is maintained, so that the intervals in a day vary from 0.00 to 23.55.
+The raw data file uses military time, treating the numbers as integers. Due to this intervals have a jump at each hour mark, which is problematic in a time series plot. To correct this,the intervals are converted to minutes. Each day has 1440 minutes, with intervals ranging from 0 to 1435. The 24 hour clock is maintained. 
 
 
 ```r
     hours <- trunc(activitytable$interval/100)
     mins <- activitytable$interval-100*hours
-    activitytable <-mutate(activitytable, times = hours+(mins/100)) 
-   # Note: The new variable "times" has hour and minute of for each 24 hour day with the format "hours.minutes" at 5 minute,equidistant intervals.
+    activitytable <- mutate(activitytable, minutes = (hours*60+mins) ) #minutes
+    activitytable$date <- as.Date(activitytable$date) #date variable class
+
+    # Note: The new variable minutes has the minutes of the day at 5 minute,equidistant intervals.
 ```
 
 ## Remove NA Values
-Some analysis is done before removing the NA values to undersatnd the data set better. The %age of NA values is computed. Also, the % age of data for which the steps monitored are zero is also found. 
+Some analysis is done before removing the NA values to undersatnd the data set better. The %age of NA values in the data set is computed. Also, the % age of data for which the steps monitored are zero is also found. 
 
 
 ```r
@@ -99,9 +100,9 @@ Mean and Median values of the Daily Total Steps are as below.
    mediantotdailystep <-median(totalsteps$sumsteps)
 ```
 
-The mean of the total steps each day is 10766.19
+The mean of the total steps in a day is 10766.19
 
-The median of the total steps each day is 10765
+The median of the total steps in a day is 10765
 
 ## Average Daily Pattern for each 5 minute interval
 
@@ -109,7 +110,7 @@ The average steps of each 5 minute interval on every day is computed.(Note: the 
 
 
 ```r
-    intervaltable <- group_by(subsettable,times)
+    intervaltable <- group_by(subsettable,minutes)
     avesteptable <- summarise(intervaltable,mean(steps))
     colnames(avesteptable) <- c("times",  "averagesteps")
 ```
@@ -117,12 +118,14 @@ A plot of average steps in each 5 minute interval across all days is made as bel
 
 
 ```r
-    par(cex=0.5,lty =1, lab= c(24,5,7))
+    par(cex=0.5,lty =1, lab= c(7,5,7))
+    mylabels <- c("0:00", "4:00","8:00", "12:00", "16:00", "20:00","24:00")
     par(mfrow = c(1,1))
     par(mar = c(4,4,2,1))
     plot(averagesteps ~ times, data= avesteptable, type ="l",                    
-    xlab= "Intervals (24 Hour Clock- Hrs and Mins)",ylab ="Average Steps",
-    col = "dark red")
+    xlab= "Intervals (24 Hour Clock)",ylab ="Average Steps",
+    col = "dark red", xaxt = "n")
+    axis(1, at= c(0,240,480,720, 960,1200,1440), labels = mylabels)
     title("Average Steps across all days in each 5 Minute Interval", cex.main=1,        font.main=2)
 ```
 
@@ -133,9 +136,11 @@ The interval with the highest average number of steps is computed.
 
 ```r
    highestinterval <- avesteptable$times[which.max(avesteptable$averagestep)]
+    highestintervalhrs<- trunc(highestinterval/60)
+    highestintervalmins<- highestinterval-highestintervalhrs*60
 ```
 
-The interval with the highest average steps occurs at 8.35 ( that is 8 hours 35 minutes)
+The interval with the highest average steps occurs at 515 minutes, that is at 8 hours 35 minutes.
 
 
 ## Impute Missing Values
@@ -149,8 +154,8 @@ Compute the missing values
 
 There are 2304 missing values in the data set.
 
-The missing values are imputed with the mean value for that 5 minute interval across all days. 
-The Average steps computed for the previous question can be used for this purpose.A new dataset is created with the imputed values.
+The strategy adopted for imputing the missing values, is to use the mean value for that 5 minute interval across all days. 
+The Average steps of each interval computed for the previous question can be used for this purpose.A new dataset is created with the imputed values.
 
 
 ```r
@@ -245,7 +250,7 @@ The average steps for each 5 minute interval is calculated for workdays and week
 
 
 ```r
-    intervaltable2 <- group_by(imputetable,dayofweek, times)
+    intervaltable2 <- group_by(imputetable,dayofweek, minutes)
     avesteptable2 <- summarise(intervaltable2,mean(steps))
     colnames(avesteptable2) <- c("dayofweek","times","averagesteps")
 ```
@@ -254,12 +259,12 @@ A panel plot of the average steps in each five minute interval is made for weeke
 
 
 ```r
-    ggplot(avesteptable2, aes(times, averagesteps)) +
-    geom_line(aes(group=1, color=dayofweek)) +
-    facet_grid(.~ dayofweek) +
-    labs(title = "Average Steps in Each Interval(across all days)") +
-    labs(x ="Intervals (24 Hour Clock)", y ="Average Steps") +
-    theme_bw(base_family = "", base_size = 12)
+        ggplot(avesteptable2, aes(times, averagesteps)) +
+        geom_line(aes(group=1, color=dayofweek)) +
+        facet_grid(.~ dayofweek) +
+        labs(title = "Average Steps in Each Interval(across all days)") +
+        labs(x ="Intervals (24 Hour Clock)", y ="Average Steps") +
+        scale_x_continuous(breaks = c(0,240,480,720, 960,1200,1440), labels=mylabels)
 ```
 
 ![plot of chunk ggplot](figure/ggplot-1.png) 
@@ -284,6 +289,9 @@ summary(subset(avesteptable2, dayofweek =="Weekend")$averagesteps)
 ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 ##       0       1      32      42      75     167
 ```
+
+There is difference between the working day and weekend patterns. On working days there is a clear peak at 8 hours 35 minutes. There is less activity during the day, picking up in the evening.
+On weekends, the pattern is more evenly distributed, with multiple peeks during the day. Further anlaysis will be needed to understand the reasons.
 
 # Delete Interim Tables
 
